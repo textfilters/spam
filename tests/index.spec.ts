@@ -11,7 +11,7 @@ import {
   type SpamFilterConfig,
   type SpamFilterDecision,
   type SpamFilterInput,
-} from "./index";
+} from "../src/index.js";
 
 type SequenceStep = SpamFilterInput;
 
