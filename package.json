@@ -1,6 +1,6 @@
 {
   "name": "@textfilters/spam",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Lightweight spam guard primitives for composable text moderation.",
   "license": "MIT",
