@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/textfilters/spam/compare/v0.1.1...v0.1.2) (2026-06-08)
+
+
+### Bug Fixes
+
+* added spam regression coverage ([0e6f99c](https://github.com/textfilters/spam/commit/0e6f99c966dc42e983e9491814d18ba2ad496fec))
+
 ## [0.1.1](https://github.com/textfilters/spam/compare/v0.1.0...v0.1.1) (2026-06-08)
 
 
