@@ -1,6 +1,11 @@
 # @textfilters/spam
 
-Lightweight spam guard primitives for composable text moderation.
+Lightweight TypeScript anti-spam guard primitives for content moderation, chat
+moderation, UGC moderation, rate limiting, duplicate detection, burst detection,
+and actor-based message checks.
+
+Use `@textfilters/spam` to add stateful spam checks beside censoring and
+redaction filters in a composable TypeScript text filtering library.
 
 ## Installation
 
@@ -15,6 +20,15 @@ Install with GitHub npm authentication configured. GitHub Packages requires auth
 ```sh
 npm install @textfilters/core @textfilters/spam
 ```
+
+## Use Cases
+
+- Block repeated, too-fast, or bursty messages in chat moderation workflows.
+- Add actor-based anti-spam checks before running heavier content moderation.
+- Return stable spam decision reasons for application-specific moderation
+  policy.
+- Keep rate limiting and duplicate detection separate from text censoring
+  filters.
 
 ## Usage
 
@@ -45,6 +59,17 @@ Actor state is bounded by pruning stale entries as messages are checked. Use one
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for the decision flow, module map, and change guide.
+
+## Related Textfilters Packages
+
+- `@textfilters/core` for shared pipeline, normalization, and range masking
+  primitives.
+- `@textfilters/url` for URL detection, obfuscated links, and safe link
+  censoring.
+- `@textfilters/email` for email detection and contact redaction.
+- `@textfilters/phone` for phone number detection and contact redaction.
+- `@textfilters/profanity` for Russian profanity filtering and taxonomy-backed
+  moderation.
 
 ## Release
 
