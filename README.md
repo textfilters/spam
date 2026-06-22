@@ -40,6 +40,9 @@ const spam = createSpamFilter({
   duplicateWindowMs: 12_000,
   burstWindowMs: 10_000,
   burstMaxMessages: 6,
+  actorKeyPolicy: "reject_missing",
+  clockPolicy: "system",
+  trackRejectedAttempts: true,
 });
 
 const decision = spam.check({
@@ -55,6 +58,23 @@ const decision = spam.check({
 The package provides an in-memory, actor-based spam guard for interval, duplicate, and burst checks. Each blocked decision returns a stable reason so callers can apply their own moderation policy.
 
 Actor state is bounded by pruning stale entries as messages are checked. Use one guard instance for a shared moderation scope, or create isolated instances for separate tenants or test cases.
+
+Recommended server-side usage is to pass a stable authenticated actor key, use
+`clockPolicy: "system"` so client-provided timestamps cannot weaken checks, and
+enable `trackRejectedAttempts` when repeated rejected attempts should keep
+pressure on the actor's interval, duplicate, and burst windows.
+
+By default, missing actor keys share one stable unknown actor bucket for
+backward compatibility. Set `actorKeyPolicy: "reject_missing"` to reject
+non-empty messages without a normalized actor key with reason `missing_actor`.
+
+By default, finite `nowMs` values are accepted for deterministic tests and
+server-controlled callers. Set `clockPolicy: "system"` to ignore `nowMs` and
+always use the process clock.
+
+By default, rejected messages do not update actor state. Set
+`trackRejectedAttempts: true` to count rejected interval, duplicate, and burst
+attempts as pressure for future checks.
 
 ## Architecture
 

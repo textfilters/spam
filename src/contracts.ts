@@ -7,6 +7,7 @@ export const SPAM_FILTER_NAME = "spam";
 
 export const SPAM_BLOCK_REASONS = {
   empty: "empty",
+  missingActor: "missing_actor",
   tooFast: "too_fast",
   duplicate: "duplicate",
   burst: "burst",
@@ -20,12 +21,18 @@ export type SpamFilterDecision =
   | { readonly allowed: false; readonly reason: SpamBlockReason };
 export type SpamCheckResult = SpamFilterDecision;
 
+export type SpamActorKeyPolicy = "shared_unknown" | "reject_missing";
+export type SpamClockPolicy = "input_or_system" | "system";
+
 export interface SpamFilterConfig {
   readonly minIntervalMs: number;
   readonly duplicateWindowMs: number;
   readonly burstWindowMs: number;
   readonly burstMaxMessages: number;
   readonly maxActors: number;
+  readonly actorKeyPolicy: SpamActorKeyPolicy;
+  readonly clockPolicy: SpamClockPolicy;
+  readonly trackRejectedAttempts: boolean;
 }
 
 export interface ActorState {

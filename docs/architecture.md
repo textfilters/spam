@@ -8,9 +8,11 @@ can be used next to the URL, phone, profanity, and other text filters without a
 separate adapter.
 
 Checks are deterministic per actor. The same normalized actor key owns the
-interval, duplicate, and burst state used to decide future messages. State is
-updated only after a message passes every blocking check, which keeps rejected
-messages from extending duplicate windows or increasing burst counters.
+interval, duplicate, and burst state used to decide future messages. By default,
+state is updated only after a message passes every blocking check, which keeps
+rejected messages from extending duplicate windows or increasing burst counters.
+`trackRejectedAttempts` can opt into counting rejected interval, duplicate, and
+burst attempts as future pressure.
 
 This package is not a distributed rate-limit service. It does not coordinate
 across processes, persist data, use timers, or talk to Redis, storage, queues, or
@@ -29,7 +31,13 @@ external services.
 - `duplicateWindowMs`: time window for duplicate normalized text checks;
 - `burstWindowMs`: time window for burst counting;
 - `burstMaxMessages`: accepted messages allowed in the burst window;
-- `maxActors`: maximum actor states retained in memory.
+- `maxActors`: maximum actor states retained in memory;
+- `actorKeyPolicy`: keep missing actor keys in one shared unknown bucket, or
+  reject missing actor keys;
+- `clockPolicy`: accept finite caller-provided `nowMs` values, or always use the
+  process clock;
+- `trackRejectedAttempts`: whether rejected interval, duplicate, and burst
+  attempts update actor state.
 
 `SpamFilterDecision` is either `{ allowed: true }` or
 `{ allowed: false, reason }`.
@@ -37,6 +45,8 @@ external services.
 Block reasons are:
 
 - `empty`: normalized text is empty;
+- `missing_actor`: `actorKeyPolicy: "reject_missing"` rejected a non-empty
+  message without a normalized actor key;
 - `too_fast`: the actor posted before `minIntervalMs` elapsed;
 - `duplicate`: the actor repeated normalized text inside the duplicate window;
 - `burst`: the actor exceeded the accepted-message burst limit.
@@ -98,14 +108,19 @@ The filter applies blocking checks in a fixed order:
 4. burst count;
 5. accepted-state commit.
 
-Rejected messages return immediately. They do not extend duplicate windows, add
-burst timestamps, change `lastMessageAt`, or update the compatibility fields.
+Rejected messages return immediately. With the default
+`trackRejectedAttempts: false`, they do not extend duplicate windows, add burst
+timestamps, change `lastMessageAt`, or update the compatibility fields. With
+`trackRejectedAttempts: true`, rejected interval, duplicate, and burst attempts
+update the same actor state fields as accepted messages.
 
 ## State Model
 
 Each actor key maps to one `ActorState`. Missing, empty, or whitespace actor keys
 are normalized into a stable unknown actor bucket so stateless callers still get
-deterministic checks.
+deterministic checks. Set `actorKeyPolicy: "reject_missing"` for authenticated
+server-side moderation surfaces where a missing actor identity should be a
+policy failure instead of shared state.
 
 `timestamps` stores accepted message times used by the burst window. Expired
 timestamps are pruned before the burst check.
@@ -131,7 +146,8 @@ the current maximum length, and trims the result.
 
 Actor key normalization also strips zero-width characters and applies NFKC
 lowercasing through `@textfilters/core`. Empty normalized actor keys fall back to
-the stable unknown actor bucket.
+the stable unknown actor bucket unless `actorKeyPolicy: "reject_missing"` is
+enabled.
 
 ## Configuration
 
@@ -141,7 +157,10 @@ Defaults:
 - `duplicateWindowMs`: `12000`;
 - `burstWindowMs`: `10000`;
 - `burstMaxMessages`: `6`;
-- `maxActors`: `3000`.
+- `maxActors`: `3000`;
+- `actorKeyPolicy`: `"shared_unknown"`;
+- `clockPolicy`: `"input_or_system"`;
+- `trackRejectedAttempts`: `false`.
 
 Invalid config values fall back to defaults. Bounded settings reject non-numbers,
 non-finite numbers, values below their minimum, and values above
@@ -151,6 +170,19 @@ limit, or message limit to an unsafe value.
 
 `minIntervalMs` accepts `0`, which disables interval checks. Other bounded
 settings require at least `1`.
+
+`actorKeyPolicy: "shared_unknown"` preserves compatibility by grouping missing
+actor keys into one unknown bucket. `actorKeyPolicy: "reject_missing"` rejects
+non-empty messages that do not include a normalized actor key.
+
+`clockPolicy: "input_or_system"` preserves deterministic tests and trusted
+server callers by accepting finite `nowMs` values, falling back to `Date.now()`
+otherwise. `clockPolicy: "system"` ignores `nowMs` and always uses `Date.now()`.
+
+`trackRejectedAttempts: false` preserves compatibility by only committing state
+for allowed messages. `trackRejectedAttempts: true` commits rejected interval,
+duplicate, and burst attempts so repeated failures keep pressure on the same
+actor.
 
 ## Memory Bounds
 
@@ -162,7 +194,19 @@ Actors with `lastMessageAt` older than the retention window are removed.
 
 If the map is still oversized after expired actor pruning, the oldest active
 actors are evicted by `lastMessageAt` until the map is within the configured
-limit.
+limit. Eviction uses deterministic single-pass oldest selection instead of
+sorting the full actor map on every overflow.
+
+## Server-Side Policy Recommendation
+
+For authenticated chat moderation surfaces, prefer:
+
+- `actorKeyPolicy: "reject_missing"` so missing actor identity cannot share a
+  process-wide bucket;
+- `clockPolicy: "system"` so client-provided timestamps cannot weaken interval,
+  duplicate, or burst checks;
+- `trackRejectedAttempts: true` when repeated rejected attempts should maintain
+  pressure on the actor.
 
 ## Change Guide
 
