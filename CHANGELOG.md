@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/textfilters/spam/compare/v0.1.2...v0.2.0) (2026-06-22)
+
+
+### Features
+
+* add spam policy controls ([#13](https://github.com/textfilters/spam/issues/13)) ([488ca36](https://github.com/textfilters/spam/commit/488ca3645fb7f5dc36a1d47d0a5e3506d02a2408))
+
 ## [0.1.2](https://github.com/textfilters/spam/compare/v0.1.1...v0.1.2) (2026-06-08)
 
 
