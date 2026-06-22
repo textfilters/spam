@@ -6,6 +6,9 @@ export const DEFAULT_CONFIG: SpamFilterConfig = {
   burstWindowMs: 10000,
   burstMaxMessages: 6,
   maxActors: 3000,
+  actorKeyPolicy: "shared_unknown",
+  clockPolicy: "input_or_system",
+  trackRejectedAttempts: false,
 };
 
 const MAX_LIMIT = Number.MAX_SAFE_INTEGER;
@@ -46,4 +49,11 @@ export const normalizeConfig = (
     DEFAULT_CONFIG.burstMaxMessages,
   ),
   maxActors: toBoundedInt(rawConfig.maxActors, DEFAULT_CONFIG.maxActors),
+  actorKeyPolicy:
+    rawConfig.actorKeyPolicy === "reject_missing"
+      ? "reject_missing"
+      : DEFAULT_CONFIG.actorKeyPolicy,
+  clockPolicy:
+    rawConfig.clockPolicy === "system" ? "system" : DEFAULT_CONFIG.clockPolicy,
+  trackRejectedAttempts: rawConfig.trackRejectedAttempts === true,
 });

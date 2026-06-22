@@ -13,7 +13,11 @@ import {
   type SpamFilter,
   type SpamFilterConfig,
 } from "./contracts.js";
-import { normalizeActorKey, normalizeForSpam } from "./normalize.js";
+import {
+  normalizeActorKey,
+  normalizeForSpam,
+  UNKNOWN_ACTOR_KEY,
+} from "./normalize.js";
 
 export * from "./contracts.js";
 
@@ -32,14 +36,18 @@ export function createSpamFilter(
   return {
     name: SPAM_FILTER_NAME,
     check(input: SpamCheckInput) {
-      const nowMs = Number.isFinite(input.nowMs)
-        ? Number(input.nowMs)
-        : Date.now();
+      const nowMs = resolveNowMs(input.nowMs, config.clockPolicy);
       const { actorKey, text } = input;
       const normalizedActorKey = normalizeActorKey(actorKey);
       const normalized = normalizeForSpam(text);
       if (!normalized) {
         return { allowed: false, reason: SPAM_BLOCK_REASONS.empty };
+      }
+      if (
+        config.actorKeyPolicy === "reject_missing" &&
+        normalizedActorKey === UNKNOWN_ACTOR_KEY
+      ) {
+        return { allowed: false, reason: SPAM_BLOCK_REASONS.missingActor };
       }
 
       let actor = state.get(normalizedActorKey);
@@ -53,6 +61,8 @@ export function createSpamFilter(
         actor.lastMessageAt >= 0 &&
         nowMs - actor.lastMessageAt < config.minIntervalMs
       ) {
+        commitRejectedAttempt(actor, normalized, nowMs, config);
+        pruneActorStates(state, nowMs, config.maxActors, retentionMs);
         return { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast };
       }
 
@@ -62,11 +72,15 @@ export function createSpamFilter(
         previousTextAt !== undefined &&
         nowMs - previousTextAt < config.duplicateWindowMs
       ) {
+        commitRejectedAttempt(actor, normalized, nowMs, config);
+        pruneActorStates(state, nowMs, config.maxActors, retentionMs);
         return { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate };
       }
 
       pruneBurstTimestamps(actor, nowMs, config.burstWindowMs);
       if (actor.timestamps.length >= config.burstMaxMessages) {
+        commitRejectedAttempt(actor, normalized, nowMs, config);
+        pruneActorStates(state, nowMs, config.maxActors, retentionMs);
         return { allowed: false, reason: SPAM_BLOCK_REASONS.burst };
       }
 
@@ -85,6 +99,36 @@ export function createSpamFilter(
       state.clear();
     },
   };
+}
+
+function resolveNowMs(
+  nowMs: number | undefined,
+  clockPolicy: SpamFilterConfig["clockPolicy"],
+): number {
+  if (clockPolicy === "input_or_system" && Number.isFinite(nowMs)) {
+    return Number(nowMs);
+  }
+
+  return Date.now();
+}
+
+function commitRejectedAttempt(
+  actor: ActorState,
+  normalized: string,
+  nowMs: number,
+  config: SpamFilterConfig,
+): void {
+  if (!config.trackRejectedAttempts) return;
+
+  const commitAt = Math.max(nowMs, actor.lastMessageAt, actor.lastTextAt);
+  pruneDuplicateTexts(actor, commitAt, config.duplicateWindowMs);
+  pruneBurstTimestamps(actor, commitAt, config.burstWindowMs);
+
+  actor.timestamps.push(commitAt);
+  actor.lastMessageAt = commitAt;
+  actor.lastNormalizedText = normalized;
+  actor.lastTextAt = commitAt;
+  actor.recentNormalizedTexts.set(normalized, commitAt);
 }
 
 export function spamFilter(

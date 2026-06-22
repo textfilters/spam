@@ -47,6 +47,11 @@ describe("textfilters-spam", () => {
       lastTextAt: number;
       recentNormalizedTexts: Map<string, number>;
     }>();
+    expectTypeOf<SpamFilterConfig>().toMatchTypeOf<{
+      actorKeyPolicy: "shared_unknown" | "reject_missing";
+      clockPolicy: "input_or_system" | "system";
+      trackRejectedAttempts: boolean;
+    }>();
     expect(filter.name).toBe(SPAM_FILTER_NAME);
     const result: SpamCheckResult = filter.check(input);
     expect(result).toEqual({ allowed: true });
@@ -165,6 +170,30 @@ describe("textfilters-spam", () => {
       });
       expect(
         filter.check({ actorKey: "u1", text: "two", nowMs: Number.NaN }),
+      ).toEqual({
+        allowed: false,
+        reason: SPAM_BLOCK_REASONS.tooFast,
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("can ignore caller-provided clocks for server-side time policy", () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    const filter = createSpamFilter({
+      clockPolicy: "system",
+      minIntervalMs: 700,
+    });
+
+    try {
+      nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(1_600);
+
+      expect(
+        filter.check({ actorKey: "u1", text: "one", nowMs: 10_000 }),
+      ).toEqual({ allowed: true });
+      expect(
+        filter.check({ actorKey: "u1", text: "two", nowMs: 20_000 }),
       ).toEqual({
         allowed: false,
         reason: SPAM_BLOCK_REASONS.tooFast,
@@ -331,6 +360,110 @@ describe("textfilters-spam", () => {
     ).toEqual([
       { allowed: true },
       { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate },
+    ]);
+  });
+
+  it("keeps missing actor keys in the shared unknown bucket by default", () => {
+    expect(
+      expectDecisions({ minIntervalMs: 0, duplicateWindowMs: 10_000 }, [
+        { text: "same", nowMs: 1_000 },
+        { actorKey: "   ", text: " same ", nowMs: 2_000 },
+      ]),
+    ).toEqual([
+      { allowed: true },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate },
+    ]);
+  });
+
+  it("can reject missing actor keys explicitly", () => {
+    const filter = createSpamFilter({
+      actorKeyPolicy: "reject_missing",
+      minIntervalMs: 0,
+    });
+
+    expect(filter.check({ text: "hello", nowMs: 1_000 })).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.missingActor,
+    });
+    expect(
+      filter.check({ actorKey: "   ", text: "hello", nowMs: 1_000 }),
+    ).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.missingActor,
+    });
+    expect(
+      filter.check({ actorKey: "u1", text: "hello", nowMs: 1_000 }),
+    ).toEqual({
+      allowed: true,
+    });
+  });
+
+  it("keeps rejected attempts from updating state by default", () => {
+    expect(
+      expectDecisions({ minIntervalMs: 700 }, [
+        { actorKey: "u1", text: "one", nowMs: 1_000 },
+        { actorKey: "u1", text: "two", nowMs: 1_600 },
+        { actorKey: "u1", text: "three", nowMs: 1_701 },
+      ]),
+    ).toEqual([
+      { allowed: true },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
+      { allowed: true },
+    ]);
+  });
+
+  it("can track rejected attempts to keep pressure on repeated failures", () => {
+    expect(
+      expectDecisions({ minIntervalMs: 700, trackRejectedAttempts: true }, [
+        { actorKey: "u1", text: "one", nowMs: 1_000 },
+        { actorKey: "u1", text: "two", nowMs: 1_600 },
+        { actorKey: "u1", text: "three", nowMs: 1_701 },
+        { actorKey: "u1", text: "four", nowMs: 2_301 },
+      ]),
+    ).toEqual([
+      { allowed: true },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
+    ]);
+  });
+
+  it("does not let tracked rejected attempts rewind actor time", () => {
+    expect(
+      expectDecisions({ minIntervalMs: 700, trackRejectedAttempts: true }, [
+        { actorKey: "u1", text: "one", nowMs: 1_000 },
+        { actorKey: "u1", text: "back", nowMs: 500 },
+        { actorKey: "u1", text: "next", nowMs: 1_200 },
+      ]),
+    ).toEqual([
+      { allowed: true },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
+    ]);
+  });
+
+  it("can extend duplicate windows after rejected duplicates", () => {
+    expect(
+      expectDecisions(
+        {
+          minIntervalMs: 0,
+          duplicateWindowMs: 1_000,
+          trackRejectedAttempts: true,
+        },
+        [
+          { actorKey: "u1", text: "same", nowMs: 1_000 },
+          { actorKey: "u1", text: "same", nowMs: 1_500 },
+          { actorKey: "u1", text: "same", nowMs: 2_001 },
+          { actorKey: "u1", text: "same", nowMs: 2_501 },
+          { actorKey: "u1", text: "same", nowMs: 3_502 },
+        ],
+      ),
+    ).toEqual([
+      { allowed: true },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate },
+      { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate },
+      { allowed: true },
     ]);
   });
 

@@ -45,11 +45,18 @@ export const pruneActorStates = (
     if (state.size <= maxActors) return;
   }
 
-  const victims = Array.from(state.entries()).sort(
-    (a, b) => a[1].lastMessageAt - b[1].lastMessageAt,
-  );
-  while (state.size > maxActors && victims.length) {
-    const [key] = victims.shift() as [string, ActorState];
-    state.delete(key);
+  while (state.size > maxActors) {
+    let oldestKey: string | undefined;
+    let oldestAt = Number.POSITIVE_INFINITY;
+
+    for (const [key, actor] of state) {
+      if (actor.lastMessageAt < oldestAt) {
+        oldestAt = actor.lastMessageAt;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey === undefined) return;
+    state.delete(oldestKey);
   }
 };
