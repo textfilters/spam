@@ -179,6 +179,25 @@ describe("textfilters-spam", () => {
     }
   });
 
+  it("falls back to Date.now when nowMs is missing", () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    const filter = createSpamFilter({ minIntervalMs: 700 });
+
+    try {
+      nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(1_600);
+
+      expect(filter.check({ actorKey: "u1", text: "one" })).toEqual({
+        allowed: true,
+      });
+      expect(filter.check({ actorKey: "u1", text: "two" })).toEqual({
+        allowed: false,
+        reason: SPAM_BLOCK_REASONS.tooFast,
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("can ignore caller-provided clocks for server-side time policy", () => {
     const nowSpy = vi.spyOn(Date, "now");
     const filter = createSpamFilter({
@@ -197,6 +216,27 @@ describe("textfilters-spam", () => {
       ).toEqual({
         allowed: false,
         reason: SPAM_BLOCK_REASONS.tooFast,
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("uses system time with missing nowMs under system clock policy", () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    const filter = createSpamFilter({
+      clockPolicy: "system",
+      minIntervalMs: 700,
+    });
+
+    try {
+      nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(1_701);
+
+      expect(filter.check({ actorKey: "u1", text: "one" })).toEqual({
+        allowed: true,
+      });
+      expect(filter.check({ actorKey: "u1", text: "two" })).toEqual({
+        allowed: true,
       });
     } finally {
       nowSpy.mockRestore();

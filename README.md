@@ -72,6 +72,19 @@ By default, finite `nowMs` values are accepted for deterministic tests and
 server-controlled callers. Set `clockPolicy: "system"` to ignore `nowMs` and
 always use the process clock.
 
+Supported clock policies:
+
+- `input_or_system` is the default. It accepts finite `nowMs` values and falls
+  back to `Date.now()` when `nowMs` is missing or non-finite. This preserves
+  deterministic tests and trusted server-controlled timestamps.
+- `system` ignores caller-provided `nowMs` and always uses `Date.now()`. Prefer
+  this policy for server-side moderation endpoints that receive untrusted client
+  input.
+
+Finite negative and backward-moving `nowMs` values are preserved for
+compatibility under `input_or_system`. They are useful for deterministic tests
+but should not be accepted directly from untrusted clients.
+
 By default, rejected messages do not update actor state. Set
 `trackRejectedAttempts: true` to count rejected interval, duplicate, and burst
 attempts as pressure for future checks.
