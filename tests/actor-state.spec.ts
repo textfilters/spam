@@ -35,6 +35,15 @@ describe("actor state pruning", () => {
     expect(actor.timestamps).toEqual([1_500, 1_900]);
   });
 
+  it("prunes expired burst timestamps after retained non-monotonic entries", () => {
+    const actor = createActorState();
+    actor.timestamps.push(1_000, 500, 1_250);
+
+    pruneBurstTimestamps(actor, 1_501, 1_000);
+
+    expect(actor.timestamps).toEqual([1_000, 1_250]);
+  });
+
   it("does not prune actors below maxActors", () => {
     const state = new Map<string, ActorState>([
       ["a", actorState(1_000)],

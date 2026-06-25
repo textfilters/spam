@@ -26,22 +26,16 @@ export const pruneBurstTimestamps = (
   burstWindowMs: number,
 ): void => {
   const timestamps = actor.timestamps;
-  let firstKeptIndex = 0;
+  let writeIndex = 0;
 
-  while (
-    firstKeptIndex < timestamps.length &&
-    nowMs - timestamps[firstKeptIndex] >= burstWindowMs
-  ) {
-    firstKeptIndex++;
+  for (const timestamp of timestamps) {
+    if (nowMs - timestamp < burstWindowMs) {
+      timestamps[writeIndex] = timestamp;
+      writeIndex++;
+    }
   }
 
-  if (firstKeptIndex === 0) return;
-  if (firstKeptIndex === timestamps.length) {
-    timestamps.length = 0;
-    return;
-  }
-
-  timestamps.splice(0, firstKeptIndex);
+  timestamps.length = writeIndex;
 };
 
 export const pruneActorStates = (
