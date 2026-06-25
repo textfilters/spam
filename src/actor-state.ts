@@ -25,9 +25,23 @@ export const pruneBurstTimestamps = (
   nowMs: number,
   burstWindowMs: number,
 ): void => {
-  actor.timestamps = actor.timestamps.filter(
-    (ts) => nowMs - ts < burstWindowMs,
-  );
+  const timestamps = actor.timestamps;
+  let firstKeptIndex = 0;
+
+  while (
+    firstKeptIndex < timestamps.length &&
+    nowMs - timestamps[firstKeptIndex] >= burstWindowMs
+  ) {
+    firstKeptIndex++;
+  }
+
+  if (firstKeptIndex === 0) return;
+  if (firstKeptIndex === timestamps.length) {
+    timestamps.length = 0;
+    return;
+  }
+
+  timestamps.splice(0, firstKeptIndex);
 };
 
 export const pruneActorStates = (
@@ -45,7 +59,8 @@ export const pruneActorStates = (
     if (state.size <= maxActors) return;
   }
 
-  while (state.size > maxActors) {
+  const evictCount = state.size - maxActors;
+  if (evictCount === 1) {
     let oldestKey: string | undefined;
     let oldestAt = Number.POSITIVE_INFINITY;
 
@@ -56,7 +71,20 @@ export const pruneActorStates = (
       }
     }
 
-    if (oldestKey === undefined) return;
-    state.delete(oldestKey);
+    if (oldestKey !== undefined) {
+      state.delete(oldestKey);
+    }
+    return;
+  }
+
+  const oldest = Array.from(state, ([key, actor]) => ({
+    key,
+    lastMessageAt: actor.lastMessageAt,
+  }))
+    .sort((left, right) => left.lastMessageAt - right.lastMessageAt)
+    .slice(0, evictCount);
+
+  for (const { key } of oldest) {
+    state.delete(key);
   }
 };
