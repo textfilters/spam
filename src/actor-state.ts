@@ -1,4 +1,4 @@
-import type { ActorState } from "./contracts.js";
+import type { ActorState, SpamStateStore } from "./contracts.js";
 
 export const createActorState = (): ActorState => ({
   timestamps: [],
@@ -7,6 +7,75 @@ export const createActorState = (): ActorState => ({
   lastTextAt: Number.NEGATIVE_INFINITY,
   recentNormalizedTexts: new Map(),
 });
+
+export const createInMemorySpamStateStore = (): SpamStateStore => {
+  const actors = new Map<string, ActorState>();
+
+  return {
+    get size() {
+      return actors.size;
+    },
+    get(actorKey) {
+      return actors.get(actorKey);
+    },
+    set(actorKey, state) {
+      actors.set(actorKey, state);
+    },
+    delete(actorKey) {
+      return actors.delete(actorKey);
+    },
+    clear() {
+      actors.clear();
+    },
+    entries() {
+      return actors.entries();
+    },
+  };
+};
+
+export const createScopedSpamStateStore = (
+  store: SpamStateStore,
+  scope: string,
+): SpamStateStore => {
+  const prefix = `${scope.length}:${scope}:`;
+
+  return {
+    get size() {
+      let size = 0;
+
+      for (const [key] of store.entries()) {
+        if (key.startsWith(prefix)) {
+          size++;
+        }
+      }
+
+      return size;
+    },
+    get(actorKey) {
+      return store.get(`${prefix}${actorKey}`);
+    },
+    set(actorKey, state) {
+      store.set(`${prefix}${actorKey}`, state);
+    },
+    delete(actorKey) {
+      return store.delete(`${prefix}${actorKey}`);
+    },
+    clear() {
+      for (const [key] of store.entries()) {
+        if (key.startsWith(prefix)) {
+          store.delete(key);
+        }
+      }
+    },
+    *entries() {
+      for (const [key, state] of store.entries()) {
+        if (key.startsWith(prefix)) {
+          yield [key.slice(prefix.length), state];
+        }
+      }
+    },
+  };
+};
 
 export const pruneDuplicateTexts = (
   actor: ActorState,
@@ -39,14 +108,14 @@ export const pruneBurstTimestamps = (
 };
 
 export const pruneActorStates = (
-  state: Map<string, ActorState>,
+  state: SpamStateStore,
   nowMs: number,
   maxActors: number,
   retentionMs: number,
 ): void => {
   if (state.size <= maxActors) return;
 
-  for (const [key, actor] of state) {
+  for (const [key, actor] of state.entries()) {
     if (nowMs - actor.lastMessageAt > retentionMs) {
       state.delete(key);
     }
@@ -58,7 +127,7 @@ export const pruneActorStates = (
     let oldestKey: string | undefined;
     let oldestAt = Number.POSITIVE_INFINITY;
 
-    for (const [key, actor] of state) {
+    for (const [key, actor] of state.entries()) {
       if (actor.lastMessageAt < oldestAt) {
         oldestAt = actor.lastMessageAt;
         oldestKey = key;
@@ -71,7 +140,7 @@ export const pruneActorStates = (
     return;
   }
 
-  const oldest = Array.from(state, ([key, actor]) => ({
+  const oldest = Array.from(state.entries(), ([key, actor]) => ({
     key,
     lastMessageAt: actor.lastMessageAt,
   }))

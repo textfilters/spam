@@ -33,6 +33,7 @@ export interface SpamFilterConfig {
   readonly actorKeyPolicy: SpamActorKeyPolicy;
   readonly clockPolicy: SpamClockPolicy;
   readonly trackRejectedAttempts: boolean;
+  readonly stateStore?: SpamStateStore;
 }
 
 export interface ActorState {
@@ -41,6 +42,15 @@ export interface ActorState {
   lastNormalizedText: string;
   lastTextAt: number;
   recentNormalizedTexts: Map<string, number>;
+}
+
+export interface SpamStateStore {
+  readonly size: number;
+  get(actorKey: string): ActorState | undefined;
+  set(actorKey: string, state: ActorState): void;
+  delete(actorKey: string): boolean;
+  clear(): void;
+  entries(): Iterable<[string, ActorState]>;
 }
 
 export interface SpamFilter extends TextGuard {

@@ -37,7 +37,15 @@ external services.
 - `clockPolicy`: accept finite caller-provided `nowMs` values, or always use the
   process clock;
 - `trackRejectedAttempts`: whether rejected interval, duplicate, and burst
-  attempts update actor state.
+  attempts update actor state;
+- `stateStore`: optional actor state storage used by the guard. Omitting it
+  creates an isolated in-memory store for the filter instance.
+
+`createInMemorySpamStateStore()` creates the default store implementation for
+callers that want to share state between guard instances with matching state
+policy settings without adding an external storage dependency. Filters with
+different state policy windows keep separate actor buckets inside a shared
+store.
 
 `SpamFilterDecision` is either `{ allowed: true }` or
 `{ allowed: false, reason }`.
@@ -51,7 +59,7 @@ Block reasons are:
 - `duplicate`: the actor repeated normalized text inside the duplicate window;
 - `burst`: the actor exceeded the accepted-message burst limit.
 
-`reset()` clears all in-memory actor state for the filter instance.
+`reset()` clears the configured actor state store scope for the filter instance.
 
 ## High-Level Flow
 
