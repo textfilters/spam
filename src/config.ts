@@ -1,4 +1,4 @@
-import type { SpamFilterConfig } from "./contracts.js";
+import type { SpamFilterConfig, SpamStateStore } from "./contracts.js";
 
 export const DEFAULT_CONFIG: SpamFilterConfig = {
   minIntervalMs: 700,
@@ -56,4 +56,26 @@ export const normalizeConfig = (
   clockPolicy:
     rawConfig.clockPolicy === "system" ? "system" : DEFAULT_CONFIG.clockPolicy,
   trackRejectedAttempts: rawConfig.trackRejectedAttempts === true,
+  stateStore: isSpamStateStore(rawConfig.stateStore)
+    ? rawConfig.stateStore
+    : undefined,
 });
+
+function isSpamStateStore(value: unknown): value is SpamStateStore {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "get" in value &&
+    typeof value.get === "function" &&
+    "set" in value &&
+    typeof value.set === "function" &&
+    "delete" in value &&
+    typeof value.delete === "function" &&
+    "clear" in value &&
+    typeof value.clear === "function" &&
+    "entries" in value &&
+    typeof value.entries === "function" &&
+    "size" in value &&
+    typeof value.size === "number"
+  );
+}

@@ -1,5 +1,6 @@
 import {
   createActorState,
+  createInMemorySpamStateStore,
   pruneActorStates,
   pruneBurstTimestamps,
   pruneDuplicateTexts,
@@ -20,12 +21,13 @@ import {
 } from "./normalize.js";
 
 export * from "./contracts.js";
+export { createInMemorySpamStateStore } from "./actor-state.js";
 
 export function createSpamFilter(
   rawConfig: Partial<SpamFilterConfig> = {},
 ): SpamFilter {
   const config = normalizeConfig(rawConfig);
-  const state = new Map<string, ActorState>();
+  const state = config.stateStore ?? createInMemorySpamStateStore();
 
   const retentionMs = Math.max(
     config.minIntervalMs,

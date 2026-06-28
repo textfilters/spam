@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import {
+  createInMemorySpamStateStore,
   createSpamFilter,
   SPAM_BLOCK_REASONS,
   SPAM_FILTER_NAME,
@@ -11,6 +12,7 @@ import {
   type SpamFilterConfig,
   type SpamFilterDecision,
   type SpamFilterInput,
+  type SpamStateStore,
 } from "../src/index.js";
 
 type SequenceStep = SpamFilterInput;
@@ -51,6 +53,7 @@ describe("textfilters-spam", () => {
       actorKeyPolicy: "shared_unknown" | "reject_missing";
       clockPolicy: "input_or_system" | "system";
       trackRejectedAttempts: boolean;
+      stateStore?: SpamStateStore;
     }>();
     expect(filter.name).toBe(SPAM_FILTER_NAME);
     const result: SpamCheckResult = filter.check(input);
@@ -322,6 +325,54 @@ describe("textfilters-spam", () => {
     ]);
   });
 
+  it("keeps default in-memory stores isolated by filter instance", () => {
+    const first = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 10_000,
+    });
+    const second = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 10_000,
+    });
+
+    expect(first.check({ actorKey: "u1", text: "same", nowMs: 1_000 })).toEqual(
+      { allowed: true },
+    );
+    expect(first.check({ actorKey: "u1", text: "same", nowMs: 2_000 })).toEqual(
+      {
+        allowed: false,
+        reason: SPAM_BLOCK_REASONS.duplicate,
+      },
+    );
+    expect(
+      second.check({ actorKey: "u1", text: "same", nowMs: 2_000 }),
+    ).toEqual({ allowed: true });
+  });
+
+  it("can share actor state through a supplied store", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const first = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 10_000,
+      stateStore,
+    });
+    const second = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 10_000,
+      stateStore,
+    });
+
+    expect(first.check({ actorKey: "u1", text: "same", nowMs: 1_000 })).toEqual(
+      { allowed: true },
+    );
+    expect(
+      second.check({ actorKey: "u1", text: "same", nowMs: 2_000 }),
+    ).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.duplicate,
+    });
+  });
+
   it("supports reset()", () => {
     const filter = createSpamFilter({ minIntervalMs: 10_000 });
 
@@ -341,6 +392,20 @@ describe("textfilters-spam", () => {
 
     const afterReset = { actorKey: "u1", text: "two", nowMs: 1_100 };
     expect(filter.check(afterReset)).toEqual({ allowed: true });
+  });
+
+  it("clears a supplied store on reset()", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const filter = createSpamFilter({ stateStore });
+
+    expect(filter.check({ actorKey: "u1", text: "one", nowMs: 1_000 })).toEqual(
+      { allowed: true },
+    );
+    expect(stateStore.size).toBe(1);
+
+    filter.reset();
+
+    expect(stateStore.size).toBe(0);
   });
 
   it("evicts old actor states when map grows over limit", () => {
@@ -388,6 +453,58 @@ describe("textfilters-spam", () => {
       { allowed: true },
       { allowed: true },
       { allowed: true },
+    ]);
+  });
+
+  it("prunes supplied store actor state after accepted messages", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const filter = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 100,
+      burstWindowMs: 100,
+      maxActors: 2,
+      stateStore,
+    });
+
+    expect(filter.check({ actorKey: "u1", text: "a", nowMs: 0 })).toEqual({
+      allowed: true,
+    });
+    expect(filter.check({ actorKey: "u2", text: "a", nowMs: 0 })).toEqual({
+      allowed: true,
+    });
+    expect(filter.check({ actorKey: "u3", text: "a", nowMs: 1_000 })).toEqual({
+      allowed: true,
+    });
+
+    expect([...stateStore.entries()].map(([actorKey]) => actorKey)).toEqual([
+      "u2",
+      "u3",
+    ]);
+  });
+
+  it("evicts oldest actors from a supplied store when none are stale", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const filter = createSpamFilter({
+      minIntervalMs: 1,
+      duplicateWindowMs: 1_000,
+      burstWindowMs: 1_000,
+      maxActors: 2,
+      stateStore,
+    });
+
+    expect(filter.check({ actorKey: "u1", text: "a", nowMs: 1_000 })).toEqual({
+      allowed: true,
+    });
+    expect(filter.check({ actorKey: "u2", text: "a", nowMs: 1_000 })).toEqual({
+      allowed: true,
+    });
+    expect(filter.check({ actorKey: "u3", text: "a", nowMs: 1_000 })).toEqual({
+      allowed: true,
+    });
+
+    expect([...stateStore.entries()].map(([actorKey]) => actorKey)).toEqual([
+      "u2",
+      "u3",
     ]);
   });
 
@@ -466,6 +583,29 @@ describe("textfilters-spam", () => {
       { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
       { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast },
     ]);
+  });
+
+  it("tracks rejected attempts in a supplied store", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const filter = createSpamFilter({
+      minIntervalMs: 700,
+      trackRejectedAttempts: true,
+      stateStore,
+    });
+
+    expect(filter.check({ actorKey: "u1", text: "one", nowMs: 1_000 })).toEqual(
+      { allowed: true },
+    );
+    expect(filter.check({ actorKey: "u1", text: "two", nowMs: 1_600 })).toEqual(
+      {
+        allowed: false,
+        reason: SPAM_BLOCK_REASONS.tooFast,
+      },
+    );
+
+    const actor = stateStore.get("u1");
+    expect(actor?.lastMessageAt).toBe(1_600);
+    expect(actor?.recentNormalizedTexts.get("two")).toBe(1_600);
   });
 
   it("does not let tracked rejected attempts rewind actor time", () => {
