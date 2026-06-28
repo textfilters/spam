@@ -456,6 +456,33 @@ describe("textfilters-spam", () => {
     });
   });
 
+  it("isolates shared store state between clock policies", () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    const stateStore = createInMemorySpamStateStore();
+    const inputClock = createSpamFilter({
+      minIntervalMs: 700,
+      stateStore,
+    });
+    const systemClock = createSpamFilter({
+      clockPolicy: "system",
+      minIntervalMs: 700,
+      stateStore,
+    });
+
+    try {
+      nowSpy.mockReturnValue(1_000);
+
+      expect(
+        inputClock.check({ actorKey: "u1", text: "future", nowMs: 1_000_000 }),
+      ).toEqual({ allowed: true });
+      expect(systemClock.check({ actorKey: "u1", text: "now" })).toEqual({
+        allowed: true,
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("supports reset()", () => {
     const filter = createSpamFilter({ minIntervalMs: 10_000 });
 

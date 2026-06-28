@@ -120,6 +120,7 @@ function stateScopeForConfig(config: SpamFilterConfig): string {
     config.burstMaxMessages,
     config.maxActors,
     config.actorKeyPolicy,
+    config.clockPolicy,
     config.trackRejectedAttempts,
   ]);
 }
