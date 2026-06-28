@@ -42,8 +42,10 @@ external services.
   creates an isolated in-memory store for the filter instance.
 
 `createInMemorySpamStateStore()` creates the default store implementation for
-callers that want to share state between guard instances without adding an
-external storage dependency.
+callers that want to share state between guard instances with matching state
+policy settings without adding an external storage dependency. Filters with
+different state policy windows keep separate actor buckets inside a shared
+store.
 
 `SpamFilterDecision` is either `{ allowed: true }` or
 `{ allowed: false, reason }`.
@@ -57,7 +59,7 @@ Block reasons are:
 - `duplicate`: the actor repeated normalized text inside the duplicate window;
 - `burst`: the actor exceeded the accepted-message burst limit.
 
-`reset()` clears the configured actor state store for the filter instance.
+`reset()` clears the configured actor state store scope for the filter instance.
 
 ## High-Level Flow
 

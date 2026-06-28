@@ -33,6 +33,50 @@ export const createInMemorySpamStateStore = (): SpamStateStore => {
   };
 };
 
+export const createScopedSpamStateStore = (
+  store: SpamStateStore,
+  scope: string,
+): SpamStateStore => {
+  const prefix = `${scope.length}:${scope}:`;
+
+  return {
+    get size() {
+      let size = 0;
+
+      for (const [key] of store.entries()) {
+        if (key.startsWith(prefix)) {
+          size++;
+        }
+      }
+
+      return size;
+    },
+    get(actorKey) {
+      return store.get(`${prefix}${actorKey}`);
+    },
+    set(actorKey, state) {
+      store.set(`${prefix}${actorKey}`, state);
+    },
+    delete(actorKey) {
+      return store.delete(`${prefix}${actorKey}`);
+    },
+    clear() {
+      for (const [key] of store.entries()) {
+        if (key.startsWith(prefix)) {
+          store.delete(key);
+        }
+      }
+    },
+    *entries() {
+      for (const [key, state] of store.entries()) {
+        if (key.startsWith(prefix)) {
+          yield [key.slice(prefix.length), state];
+        }
+      }
+    },
+  };
+};
+
 export const pruneDuplicateTexts = (
   actor: ActorState,
   nowMs: number,
