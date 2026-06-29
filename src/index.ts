@@ -5,6 +5,8 @@ import {
   pruneActorStates,
   pruneBurstTimestamps,
   pruneDuplicateTexts,
+  recordRecentNormalizedText,
+  trimActorRecords,
 } from "./actor-state.js";
 import { normalizeConfig } from "./config.js";
 import {
@@ -20,6 +22,8 @@ import {
   normalizeForSpam,
   UNKNOWN_ACTOR_KEY,
 } from "./normalize.js";
+
+const MAX_RECENT_TEXTS_PER_ACTOR = 256;
 
 export * from "./contracts.js";
 export { createInMemorySpamStateStore } from "./actor-state.js";
@@ -38,6 +42,10 @@ export function createSpamFilter(
     config.duplicateWindowMs,
     config.burstWindowMs,
   );
+  const actorRecordLimits = {
+    maxTimestamps: Math.max(config.burstMaxMessages, 1),
+    maxRecentTexts: MAX_RECENT_TEXTS_PER_ACTOR,
+  };
 
   return {
     name: SPAM_FILTER_NAME,
@@ -67,6 +75,7 @@ export function createSpamFilter(
         nowMs - actor.lastMessageAt < config.minIntervalMs
       ) {
         commitRejectedAttempt(actor, normalized, nowMs, config);
+        trimActorRecords(actor, actorRecordLimits);
         if (config.trackRejectedAttempts) {
           state.set(normalizedActorKey, actor);
         }
@@ -81,6 +90,7 @@ export function createSpamFilter(
         nowMs - previousTextAt < config.duplicateWindowMs
       ) {
         commitRejectedAttempt(actor, normalized, nowMs, config);
+        trimActorRecords(actor, actorRecordLimits);
         state.set(normalizedActorKey, actor);
         pruneActorStates(state, nowMs, config.maxActors, retentionMs);
         return { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate };
@@ -89,6 +99,7 @@ export function createSpamFilter(
       pruneBurstTimestamps(actor, nowMs, config.burstWindowMs);
       if (actor.timestamps.length >= config.burstMaxMessages) {
         commitRejectedAttempt(actor, normalized, nowMs, config);
+        trimActorRecords(actor, actorRecordLimits);
         state.set(normalizedActorKey, actor);
         pruneActorStates(state, nowMs, config.maxActors, retentionMs);
         return { allowed: false, reason: SPAM_BLOCK_REASONS.burst };
@@ -100,7 +111,8 @@ export function createSpamFilter(
       actor.lastMessageAt = nowMs;
       actor.lastNormalizedText = normalized;
       actor.lastTextAt = nowMs;
-      actor.recentNormalizedTexts.set(normalized, nowMs);
+      recordRecentNormalizedText(actor, normalized, nowMs);
+      trimActorRecords(actor, actorRecordLimits);
       state.set(normalizedActorKey, actor);
       pruneActorStates(state, nowMs, config.maxActors, retentionMs);
 
@@ -152,7 +164,7 @@ function commitRejectedAttempt(
   actor.lastMessageAt = commitAt;
   actor.lastNormalizedText = normalized;
   actor.lastTextAt = commitAt;
-  actor.recentNormalizedTexts.set(normalized, commitAt);
+  recordRecentNormalizedText(actor, normalized, commitAt);
 }
 
 export function spamFilter(

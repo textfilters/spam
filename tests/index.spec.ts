@@ -65,6 +65,14 @@ const expectDecisions = (
   return decisions;
 };
 
+const onlyActorState = (stateStore: SpamStateStore): ActorState => {
+  const actors = [...stateStore.entries()];
+
+  expect(actors).toHaveLength(1);
+
+  return actors[0][1];
+};
+
 describe("textfilters-spam", () => {
   it("exposes old-compatible guard API and alias factory", () => {
     const filter = spamFilter({ minIntervalMs: 0 });
@@ -720,6 +728,58 @@ describe("textfilters-spam", () => {
       allowed: false,
       reason: SPAM_BLOCK_REASONS.tooFast,
     });
+  });
+
+  it("bounds tracked rejected burst records per actor", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const filter = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 10_000,
+      burstWindowMs: 10_000,
+      burstMaxMessages: 3,
+      trackRejectedAttempts: true,
+      stateStore,
+    });
+
+    for (let index = 0; index < 20; index++) {
+      filter.check({
+        actorKey: "u1",
+        text: `message ${index}`,
+        nowMs: 1_000 + index,
+      });
+    }
+
+    const actor = onlyActorState(stateStore);
+
+    expect(actor.timestamps).toHaveLength(3);
+    expect(actor.timestamps).toEqual([1_017, 1_018, 1_019]);
+  });
+
+  it("bounds recent duplicate text records per actor", () => {
+    const stateStore = createInMemorySpamStateStore();
+    const filter = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 60_000,
+      burstWindowMs: 60_000,
+      burstMaxMessages: 1_000,
+      stateStore,
+    });
+
+    for (let index = 0; index < 300; index++) {
+      expect(
+        filter.check({
+          actorKey: "u1",
+          text: `message ${index}`,
+          nowMs: 1_000 + index,
+        }),
+      ).toEqual({ allowed: true });
+    }
+
+    const actor = onlyActorState(stateStore);
+
+    expect(actor.recentNormalizedTexts.size).toBe(256);
+    expect(actor.recentNormalizedTexts.has("message 0")).toBe(false);
+    expect(actor.recentNormalizedTexts.get("message 299")).toBe(1_299);
   });
 
   it("persists tracked rejected attempts back to cloning stores", () => {

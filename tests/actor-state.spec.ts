@@ -5,6 +5,8 @@ import {
   pruneActorStates,
   pruneBurstTimestamps,
   pruneDuplicateTexts,
+  recordRecentNormalizedText,
+  trimActorRecords,
 } from "../src/actor-state.js";
 import type { ActorState } from "../src/index.js";
 
@@ -42,6 +44,67 @@ describe("actor state pruning", () => {
     pruneBurstTimestamps(actor, 1_501, 1_000);
 
     expect(actor.timestamps).toEqual([1_000, 1_250]);
+  });
+
+  it("trims per-actor records without replacing containers", () => {
+    const actor = createActorState();
+    actor.timestamps.push(1_000, 1_100, 1_200, 1_300);
+    actor.recentNormalizedTexts.set("oldest", 1_000);
+    actor.recentNormalizedTexts.set("older", 1_100);
+    actor.recentNormalizedTexts.set("newer", 1_200);
+    actor.recentNormalizedTexts.set("newest", 1_300);
+    const timestamps = actor.timestamps;
+    const recentTexts = actor.recentNormalizedTexts;
+
+    trimActorRecords(actor, { maxTimestamps: 2, maxRecentTexts: 2 });
+
+    expect(actor.timestamps).toBe(timestamps);
+    expect(actor.timestamps).toEqual([1_200, 1_300]);
+    expect(actor.recentNormalizedTexts).toBe(recentTexts);
+    expect([...actor.recentNormalizedTexts]).toEqual([
+      ["newer", 1_200],
+      ["newest", 1_300],
+    ]);
+  });
+
+  it("keeps newest timestamp values when trimming non-monotonic records", () => {
+    const actor = createActorState();
+    actor.timestamps.push(1_000, 500, 1_250, 1_300);
+
+    trimActorRecords(actor, { maxTimestamps: 3, maxRecentTexts: 10 });
+
+    expect(actor.timestamps).toEqual([1_000, 1_250, 1_300]);
+  });
+
+  it("refreshes duplicate text recency before trimming", () => {
+    const actor = createActorState();
+    actor.recentNormalizedTexts.set("old", 1_000);
+    actor.recentNormalizedTexts.set("middle", 1_100);
+    actor.recentNormalizedTexts.set("new", 1_200);
+
+    recordRecentNormalizedText(actor, "old", 1_300);
+    trimActorRecords(actor, { maxTimestamps: 10, maxRecentTexts: 2 });
+
+    expect([...actor.recentNormalizedTexts]).toEqual([
+      ["new", 1_200],
+      ["old", 1_300],
+    ]);
+  });
+
+  it("keeps newest duplicate text timestamps when trimming non-monotonic records", () => {
+    const actor = createActorState();
+    actor.recentNormalizedTexts.set("future", 10_000);
+    actor.recentNormalizedTexts.set("past-0", 0);
+    actor.recentNormalizedTexts.set("past-1", 1);
+    actor.recentNormalizedTexts.set("past-2", 2);
+
+    trimActorRecords(actor, { maxTimestamps: 10, maxRecentTexts: 3 });
+
+    expect([...actor.recentNormalizedTexts]).toEqual([
+      ["future", 10_000],
+      ["past-1", 1],
+      ["past-2", 2],
+    ]);
   });
 
   it("does not prune actors below maxActors", () => {
