@@ -91,6 +91,22 @@ describe("actor state pruning", () => {
     ]);
   });
 
+  it("keeps newest duplicate text timestamps when trimming non-monotonic records", () => {
+    const actor = createActorState();
+    actor.recentNormalizedTexts.set("future", 10_000);
+    actor.recentNormalizedTexts.set("past-0", 0);
+    actor.recentNormalizedTexts.set("past-1", 1);
+    actor.recentNormalizedTexts.set("past-2", 2);
+
+    trimActorRecords(actor, { maxTimestamps: 10, maxRecentTexts: 3 });
+
+    expect([...actor.recentNormalizedTexts]).toEqual([
+      ["future", 10_000],
+      ["past-1", 1],
+      ["past-2", 2],
+    ]);
+  });
+
   it("does not prune actors below maxActors", () => {
     const state = new Map<string, ActorState>([
       ["a", actorState(1_000)],

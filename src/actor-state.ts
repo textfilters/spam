@@ -121,10 +121,19 @@ export const trimActorRecords = (
     actor.timestamps.splice(0, actor.timestamps.length - limits.maxTimestamps);
   }
 
-  while (actor.recentNormalizedTexts.size > limits.maxRecentTexts) {
-    const oldest = actor.recentNormalizedTexts.keys().next();
-    if (oldest.done) return;
-    actor.recentNormalizedTexts.delete(oldest.value);
+  if (actor.recentNormalizedTexts.size > limits.maxRecentTexts) {
+    const removeCount =
+      actor.recentNormalizedTexts.size - limits.maxRecentTexts;
+    const oldestTexts = Array.from(
+      actor.recentNormalizedTexts,
+      ([text, seenAt]) => ({ seenAt, text }),
+    )
+      .sort((left, right) => left.seenAt - right.seenAt)
+      .slice(0, removeCount);
+
+    for (const { text } of oldestTexts) {
+      actor.recentNormalizedTexts.delete(text);
+    }
   }
 };
 
