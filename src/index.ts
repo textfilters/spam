@@ -5,6 +5,7 @@ import {
   pruneActorStates,
   pruneBurstTimestamps,
   pruneDuplicateTexts,
+  recordRecentNormalizedText,
   trimActorRecords,
 } from "./actor-state.js";
 import { normalizeConfig } from "./config.js";
@@ -110,7 +111,7 @@ export function createSpamFilter(
       actor.lastMessageAt = nowMs;
       actor.lastNormalizedText = normalized;
       actor.lastTextAt = nowMs;
-      actor.recentNormalizedTexts.set(normalized, nowMs);
+      recordRecentNormalizedText(actor, normalized, nowMs);
       trimActorRecords(actor, actorRecordLimits);
       state.set(normalizedActorKey, actor);
       pruneActorStates(state, nowMs, config.maxActors, retentionMs);
@@ -163,7 +164,7 @@ function commitRejectedAttempt(
   actor.lastMessageAt = commitAt;
   actor.lastNormalizedText = normalized;
   actor.lastTextAt = commitAt;
-  actor.recentNormalizedTexts.set(normalized, commitAt);
+  recordRecentNormalizedText(actor, normalized, commitAt);
 }
 
 export function spamFilter(

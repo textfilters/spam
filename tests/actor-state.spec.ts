@@ -5,6 +5,7 @@ import {
   pruneActorStates,
   pruneBurstTimestamps,
   pruneDuplicateTexts,
+  recordRecentNormalizedText,
   trimActorRecords,
 } from "../src/actor-state.js";
 import type { ActorState } from "../src/index.js";
@@ -63,6 +64,30 @@ describe("actor state pruning", () => {
     expect([...actor.recentNormalizedTexts]).toEqual([
       ["newer", 1_200],
       ["newest", 1_300],
+    ]);
+  });
+
+  it("keeps newest timestamp values when trimming non-monotonic records", () => {
+    const actor = createActorState();
+    actor.timestamps.push(1_000, 500, 1_250, 1_300);
+
+    trimActorRecords(actor, { maxTimestamps: 3, maxRecentTexts: 10 });
+
+    expect(actor.timestamps).toEqual([1_000, 1_250, 1_300]);
+  });
+
+  it("refreshes duplicate text recency before trimming", () => {
+    const actor = createActorState();
+    actor.recentNormalizedTexts.set("old", 1_000);
+    actor.recentNormalizedTexts.set("middle", 1_100);
+    actor.recentNormalizedTexts.set("new", 1_200);
+
+    recordRecentNormalizedText(actor, "old", 1_300);
+    trimActorRecords(actor, { maxTimestamps: 10, maxRecentTexts: 2 });
+
+    expect([...actor.recentNormalizedTexts]).toEqual([
+      ["new", 1_200],
+      ["old", 1_300],
     ]);
   });
 

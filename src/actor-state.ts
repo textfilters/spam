@@ -117,6 +117,7 @@ export const trimActorRecords = (
   limits: ActorRecordLimits,
 ): void => {
   if (actor.timestamps.length > limits.maxTimestamps) {
+    actor.timestamps.sort((left, right) => left - right);
     actor.timestamps.splice(0, actor.timestamps.length - limits.maxTimestamps);
   }
 
@@ -125,6 +126,15 @@ export const trimActorRecords = (
     if (oldest.done) return;
     actor.recentNormalizedTexts.delete(oldest.value);
   }
+};
+
+export const recordRecentNormalizedText = (
+  actor: ActorState,
+  normalized: string,
+  seenAt: number,
+): void => {
+  actor.recentNormalizedTexts.delete(normalized);
+  actor.recentNormalizedTexts.set(normalized, seenAt);
 };
 
 export const pruneActorStates = (
