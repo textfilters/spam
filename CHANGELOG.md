@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.1](https://github.com/textfilters/spam/compare/v0.2.0...v0.2.1) (2026-06-30)
+
+
+### Bug Fixes
+
+* align core dependency with supported line ([ce334e6](https://github.com/textfilters/spam/commit/ce334e618495461e26c0c9d394eb0c3bebd21098))
+* bound memory spam state store ([553eebc](https://github.com/textfilters/spam/commit/553eebc40b905e215efb5a0588c6898511587463))
+* fix nonmonotonic burst pruning ([b17cae0](https://github.com/textfilters/spam/commit/b17cae0770da0219bd879970f412519a4c4f8a64))
+
+
+### Documentation
+
+* document spam clock semantics ([4b8a752](https://github.com/textfilters/spam/commit/4b8a752cb87d50905c2fc1a9c0f99a24d9c7a71f))
+
+
+### Performance Improvements
+
+* reduce guard state pruning overhead ([14123d5](https://github.com/textfilters/spam/commit/14123d51eae17d29fe6691446ff53c28334b652d))
+
 ## [0.2.0](https://github.com/textfilters/spam/compare/v0.1.2...v0.2.0) (2026-06-22)
 
 
