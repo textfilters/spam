@@ -61,7 +61,16 @@ const decision = spam.check({
 
 The package provides an in-memory, actor-based spam guard for interval, duplicate, and burst checks. Each blocked decision returns a stable reason so callers can apply their own moderation policy.
 
-Actor state is bounded by pruning stale entries as messages are checked. Use one guard instance for a shared moderation scope, or create isolated instances for separate tenants or test cases. `stateStore` can supply a custom `SpamStateStore`; omitting it creates an isolated in-memory store for that filter instance. Filters with matching state policy settings can share a store, while filters with different policy windows keep isolated actor buckets inside the same store. `reset()` clears the configured store scope for the filter.
+Actor state is bounded by pruning stale entries as messages are checked and by
+trimming each actor's record lists after state updates. Each actor keeps at most
+`burstMaxMessages` burst timestamps and 256 recent normalized text entries for
+duplicate detection. Use one guard instance for a shared moderation scope, or
+create isolated instances for separate tenants or test cases. `stateStore` can
+supply a custom `SpamStateStore`; omitting it creates an isolated in-memory store
+for that filter instance. Filters with matching state policy settings can share
+a store, while filters with different policy windows keep isolated actor buckets
+inside the same store. `reset()` clears the configured store scope for the
+filter.
 
 Recommended server-side usage is to pass a stable authenticated actor key, use
 `clockPolicy: "system"` so client-provided timestamps cannot weaken checks, and

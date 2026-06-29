@@ -5,6 +5,7 @@ import {
   pruneActorStates,
   pruneBurstTimestamps,
   pruneDuplicateTexts,
+  trimActorRecords,
 } from "../src/actor-state.js";
 import type { ActorState } from "../src/index.js";
 
@@ -42,6 +43,27 @@ describe("actor state pruning", () => {
     pruneBurstTimestamps(actor, 1_501, 1_000);
 
     expect(actor.timestamps).toEqual([1_000, 1_250]);
+  });
+
+  it("trims per-actor records without replacing containers", () => {
+    const actor = createActorState();
+    actor.timestamps.push(1_000, 1_100, 1_200, 1_300);
+    actor.recentNormalizedTexts.set("oldest", 1_000);
+    actor.recentNormalizedTexts.set("older", 1_100);
+    actor.recentNormalizedTexts.set("newer", 1_200);
+    actor.recentNormalizedTexts.set("newest", 1_300);
+    const timestamps = actor.timestamps;
+    const recentTexts = actor.recentNormalizedTexts;
+
+    trimActorRecords(actor, { maxTimestamps: 2, maxRecentTexts: 2 });
+
+    expect(actor.timestamps).toBe(timestamps);
+    expect(actor.timestamps).toEqual([1_200, 1_300]);
+    expect(actor.recentNormalizedTexts).toBe(recentTexts);
+    expect([...actor.recentNormalizedTexts]).toEqual([
+      ["newer", 1_200],
+      ["newest", 1_300],
+    ]);
   });
 
   it("does not prune actors below maxActors", () => {

@@ -107,6 +107,26 @@ export const pruneBurstTimestamps = (
   timestamps.length = writeIndex;
 };
 
+export interface ActorRecordLimits {
+  readonly maxTimestamps: number;
+  readonly maxRecentTexts: number;
+}
+
+export const trimActorRecords = (
+  actor: ActorState,
+  limits: ActorRecordLimits,
+): void => {
+  if (actor.timestamps.length > limits.maxTimestamps) {
+    actor.timestamps.splice(0, actor.timestamps.length - limits.maxTimestamps);
+  }
+
+  while (actor.recentNormalizedTexts.size > limits.maxRecentTexts) {
+    const oldest = actor.recentNormalizedTexts.keys().next();
+    if (oldest.done) return;
+    actor.recentNormalizedTexts.delete(oldest.value);
+  }
+};
+
 export const pruneActorStates = (
   state: SpamStateStore,
   nowMs: number,

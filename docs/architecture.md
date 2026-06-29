@@ -131,13 +131,16 @@ server-side moderation surfaces where a missing actor identity should be a
 policy failure instead of shared state.
 
 `timestamps` stores accepted message times used by the burst window. Expired
-timestamps are pruned before the burst check.
+timestamps are pruned before the burst check, and the retained list is capped at
+`burstMaxMessages` after accepted or tracked rejected attempts are committed.
 
 `lastMessageAt` stores the most recent accepted message time for interval
 checks.
 
 `recentNormalizedTexts` stores normalized accepted text and its accepted time for
-duplicate-window checks.
+duplicate-window checks. Expired entries are pruned by `duplicateWindowMs`, and
+the retained cache is capped at 256 entries per actor to prevent one actor from
+growing memory without bound inside a long duplicate window.
 
 `lastNormalizedText` and `lastTextAt` remain in `ActorState` as
 compatibility/runtime fields. They are updated only during the accepted-state
@@ -196,6 +199,12 @@ actor.
 
 Actor state is stored in an in-memory map. The retention window is the largest of
 `minIntervalMs`, `duplicateWindowMs`, and `burstWindowMs`.
+
+Each actor state is also bounded independently of actor-map pruning. Burst
+timestamps keep only the newest `burstMaxMessages` entries, and the duplicate
+text cache keeps only the newest 256 normalized text entries. This keeps
+per-actor memory bounded even when one actor sends many unique messages or when
+`trackRejectedAttempts` records repeated rejected attempts.
 
 When the actor map grows past `maxActors`, expired actors are pruned first.
 Actors with `lastMessageAt` older than the retention window are removed.
