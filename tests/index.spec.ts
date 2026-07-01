@@ -600,6 +600,32 @@ describe("textfilters-spam", () => {
     });
   });
 
+  it("preserves burst state across duplicate rejections with out-of-order clocks", () => {
+    const filter = createSpamFilter({
+      minIntervalMs: 0,
+      duplicateWindowMs: 2_000,
+      burstWindowMs: 1_000,
+      burstMaxMessages: 2,
+    });
+
+    expect(filter.check({ actorKey: "u1", text: "same", nowMs: 0 })).toEqual({
+      allowed: true,
+    });
+    expect(filter.check({ actorKey: "u1", text: "other", nowMs: 100 })).toEqual(
+      { allowed: true },
+    );
+    expect(
+      filter.check({ actorKey: "u1", text: "same", nowMs: 1_500 }),
+    ).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.duplicate,
+    });
+    expect(filter.check({ actorKey: "u1", text: "late", nowMs: 500 })).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.burst,
+    });
+  });
+
   it("evicts oldest actors from a supplied store when none are stale", () => {
     const stateStore = createInMemorySpamStateStore();
     const filter = createSpamFilter({
