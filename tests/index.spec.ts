@@ -600,30 +600,30 @@ describe("textfilters-spam", () => {
     });
   });
 
-  it("persists lazy record pruning before rejected interval decisions", () => {
-    const stateStore = createCloningSpamStateStore();
+  it("preserves burst state across duplicate rejections with out-of-order clocks", () => {
     const filter = createSpamFilter({
-      minIntervalMs: 1_000,
-      duplicateWindowMs: 100,
-      burstWindowMs: 100,
-      stateStore,
+      minIntervalMs: 0,
+      duplicateWindowMs: 2_000,
+      burstWindowMs: 1_000,
+      burstMaxMessages: 2,
     });
 
+    expect(filter.check({ actorKey: "u1", text: "same", nowMs: 0 })).toEqual({
+      allowed: true,
+    });
+    expect(filter.check({ actorKey: "u1", text: "other", nowMs: 100 })).toEqual(
+      { allowed: true },
+    );
     expect(
-      filter.check({ actorKey: "u1", text: "first", nowMs: 1_000 }),
-    ).toEqual({ allowed: true });
-    expect(
-      filter.check({ actorKey: "u1", text: "second", nowMs: 1_500 }),
+      filter.check({ actorKey: "u1", text: "same", nowMs: 1_500 }),
     ).toEqual({
       allowed: false,
-      reason: SPAM_BLOCK_REASONS.tooFast,
+      reason: SPAM_BLOCK_REASONS.duplicate,
     });
-
-    const actor = onlyActorState(stateStore);
-
-    expect(actor.timestamps).toEqual([]);
-    expect([...actor.recentNormalizedTexts]).toEqual([]);
-    expect(actor.lastMessageAt).toBe(1_000);
+    expect(filter.check({ actorKey: "u1", text: "late", nowMs: 500 })).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.burst,
+    });
   });
 
   it("evicts oldest actors from a supplied store when none are stale", () => {
