@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/textfilters/spam/compare/v0.3.0...v0.3.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* preserve spam burst state compatibility ([0e3f54e](https://github.com/textfilters/spam/commit/0e3f54e842272322b10b6e055fd38fd2be1ae2a6))
+
 ## [0.3.0](https://github.com/textfilters/spam/compare/v0.2.1...v0.3.0) (2026-06-29)
 
 
