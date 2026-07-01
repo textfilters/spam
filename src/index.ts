@@ -65,9 +65,11 @@ export function createSpamFilter(
       }
 
       let actor = state.get(normalizedActorKey);
-      if (!actor) {
+      const actorExists = actor !== undefined;
+      if (actor === undefined) {
         actor = createActorState();
       }
+      pruneActorRecords(actor, nowMs, config);
 
       if (
         config.minIntervalMs > 0 &&
@@ -76,14 +78,13 @@ export function createSpamFilter(
       ) {
         commitRejectedAttempt(actor, normalized, nowMs, config);
         trimActorRecords(actor, actorRecordLimits);
-        if (config.trackRejectedAttempts) {
+        if (actorExists || config.trackRejectedAttempts) {
           state.set(normalizedActorKey, actor);
         }
         pruneActorStates(state, nowMs, config.maxActors, retentionMs);
         return { allowed: false, reason: SPAM_BLOCK_REASONS.tooFast };
       }
 
-      pruneDuplicateTexts(actor, nowMs, config.duplicateWindowMs);
       const previousTextAt = actor.recentNormalizedTexts.get(normalized);
       if (
         previousTextAt !== undefined &&
@@ -96,7 +97,6 @@ export function createSpamFilter(
         return { allowed: false, reason: SPAM_BLOCK_REASONS.duplicate };
       }
 
-      pruneBurstTimestamps(actor, nowMs, config.burstWindowMs);
       if (actor.timestamps.length >= config.burstMaxMessages) {
         commitRejectedAttempt(actor, normalized, nowMs, config);
         trimActorRecords(actor, actorRecordLimits);
@@ -146,6 +146,15 @@ function resolveNowMs(
   }
 
   return Date.now();
+}
+
+function pruneActorRecords(
+  actor: ActorState,
+  nowMs: number,
+  config: SpamFilterConfig,
+): void {
+  pruneDuplicateTexts(actor, nowMs, config.duplicateWindowMs);
+  pruneBurstTimestamps(actor, nowMs, config.burstWindowMs);
 }
 
 function commitRejectedAttempt(

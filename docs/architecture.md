@@ -71,13 +71,12 @@ flowchart TD
   text --> empty{"Empty?"}
   empty -->|yes| rejectEmpty["Return empty decision"]
   empty -->|no| actor["Get or create actor state"]
-  actor --> interval{"Interval check"}
+  actor --> recordPrune["Prune duplicate and burst records"]
+  recordPrune --> interval{"Interval check"}
   interval -->|blocked| rejectFast["Return too_fast decision"]
-  interval -->|passed| dupPrune["Prune duplicate texts"]
-  dupPrune --> duplicate{"Duplicate check"}
+  interval -->|passed| duplicate{"Duplicate check"}
   duplicate -->|blocked| rejectDuplicate["Return duplicate decision"]
-  duplicate -->|passed| burstPrune["Prune burst timestamps"]
-  burstPrune --> burst{"Burst check"}
+  duplicate -->|passed| burst{"Burst check"}
   burst -->|blocked| rejectBurst["Return burst decision"]
   burst -->|passed| commit["Commit accepted state"]
   commit --> prune["Prune actors"]
@@ -131,16 +130,18 @@ server-side moderation surfaces where a missing actor identity should be a
 policy failure instead of shared state.
 
 `timestamps` stores accepted message times used by the burst window. Expired
-timestamps are pruned before the burst check, and the retained list is capped at
+timestamps are pruned lazily when actor state is accessed, before interval,
+duplicate, or burst decisions are made. The retained list is capped at
 `burstMaxMessages` after accepted or tracked rejected attempts are committed.
 
 `lastMessageAt` stores the most recent accepted message time for interval
 checks.
 
 `recentNormalizedTexts` stores normalized accepted text and its accepted time for
-duplicate-window checks. Expired entries are pruned by `duplicateWindowMs`, and
-the retained cache is capped at 256 entries per actor to prevent one actor from
-growing memory without bound inside a long duplicate window.
+duplicate-window checks. Expired entries are pruned lazily when actor state is
+accessed, before interval, duplicate, or burst decisions are made. The retained
+cache is capped at 256 entries per actor to prevent one actor from growing
+memory without bound inside a long duplicate window.
 
 `lastNormalizedText` and `lastTextAt` remain in `ActorState` as
 compatibility/runtime fields. They are updated only during the accepted-state

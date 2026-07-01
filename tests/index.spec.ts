@@ -600,6 +600,32 @@ describe("textfilters-spam", () => {
     });
   });
 
+  it("persists lazy record pruning before rejected interval decisions", () => {
+    const stateStore = createCloningSpamStateStore();
+    const filter = createSpamFilter({
+      minIntervalMs: 1_000,
+      duplicateWindowMs: 100,
+      burstWindowMs: 100,
+      stateStore,
+    });
+
+    expect(
+      filter.check({ actorKey: "u1", text: "first", nowMs: 1_000 }),
+    ).toEqual({ allowed: true });
+    expect(
+      filter.check({ actorKey: "u1", text: "second", nowMs: 1_500 }),
+    ).toEqual({
+      allowed: false,
+      reason: SPAM_BLOCK_REASONS.tooFast,
+    });
+
+    const actor = onlyActorState(stateStore);
+
+    expect(actor.timestamps).toEqual([]);
+    expect([...actor.recentNormalizedTexts]).toEqual([]);
+    expect(actor.lastMessageAt).toBe(1_000);
+  });
+
   it("evicts oldest actors from a supplied store when none are stale", () => {
     const stateStore = createInMemorySpamStateStore();
     const filter = createSpamFilter({
