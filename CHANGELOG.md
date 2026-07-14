@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/textfilters/spam/compare/v0.3.1...v0.3.2) (2026-07-14)
+
+
+### Bug Fixes
+
+* updated core dependency to 0.4.0 ([a8676ff](https://github.com/textfilters/spam/commit/a8676ffd75ada4f3a6d030cf6e885336dc228cc6))
+
 ## [0.3.1](https://github.com/textfilters/spam/compare/v0.3.0...v0.3.1) (2026-07-01)
 
 
